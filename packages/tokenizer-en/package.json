@@ -1,0 +1,23 @@
+{
+  "name": "@wordunpack/tokenizer-en",
+  "version": "0.1.0",
+  "description": "English tokenizer provider boundary for WordUnpack.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@wordunpack/core": "0.1.0"
+  }
+}

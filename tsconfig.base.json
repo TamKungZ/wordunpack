@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "declaration": true,
+    "declarationMap": true,
+    "esModuleInterop": true,
+    "lib": ["ES2022", "DOM"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@wordunpack/api": ["packages/api/src/index.ts"],
+      "@wordunpack/core": ["packages/core/src/index.ts"],
+      "@wordunpack/gloss-en-th": ["packages/gloss-en-th/src/index.ts"],
+      "@wordunpack/gloss-ja-th": ["packages/gloss-ja-th/src/index.ts"],
+      "@wordunpack/gloss-th-en": ["packages/gloss-th-en/src/index.ts"],
+      "@wordunpack/provider-deepl": ["packages/provider-deepl/src/index.ts"],
+      "@wordunpack/provider-google": ["packages/provider-google/src/index.ts"],
+      "@wordunpack/provider-libretranslate": ["packages/provider-libretranslate/src/index.ts"],
+      "@wordunpack/provider-transformers": ["packages/provider-transformers/src/index.ts"],
+      "@wordunpack/react": ["packages/react/src/index.ts"],
+      "@wordunpack/tokenizer-en": ["packages/tokenizer-en/src/index.ts"],
+      "@wordunpack/tokenizer-ja-kuromoji": ["packages/tokenizer-ja-kuromoji/src/index.ts"],
+      "@wordunpack/tokenizer-th": ["packages/tokenizer-th/src/index.ts"]
+    },
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ES2022"
+  }
+}

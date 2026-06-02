@@ -1,0 +1,44 @@
+{
+  "name": "@wordunpack/core",
+  "version": "0.1.0",
+  "description": "A word-by-word sentence breakdown library for language learners.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TamKungZ/wordunpack.git"
+  },
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "prepublishOnly": "npm run build",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "wordunpack",
+    "japanese",
+    "translation",
+    "language-learning",
+    "word-by-word",
+    "sentence-explainer"
+  ],
+  "author": "",
+  "license": "Apache-2.0",
+  "devDependencies": {}
+}

@@ -1,0 +1,28 @@
+{
+  "name": "@wordunpack/api",
+  "version": "0.1.0",
+  "description": "Server API wrapper for WordUnpack providers.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@wordunpack/core": "0.1.0",
+    "@wordunpack/gloss-ja-th": "0.1.0",
+    "@wordunpack/provider-libretranslate": "0.1.0",
+    "@wordunpack/tokenizer-ja-kuromoji": "0.1.0",
+    "hono": "^4.6.16"
+  }
+}
