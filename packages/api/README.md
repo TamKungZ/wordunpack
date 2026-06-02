@@ -21,3 +21,27 @@ const app = createApiApp({
   },
 });
 ```
+
+## LibreTranslate Configuration
+
+```sh
+set WORDUNPACK_TRANSLATION_PROVIDER=libretranslate
+set LIBRETRANSLATE_ENDPOINT=http://localhost:5000/translate
+set LIBRETRANSLATE_API_KEY=
+```
+
+`POST /explain`:
+
+```json
+{
+  "input": "私はりんごを食べます。",
+  "source": "ja",
+  "target": "th",
+  "includeNaturalTranslation": true,
+  "includeTokenTranslation": true,
+  "timeoutMs": 30000
+}
+```
+
+If no provider is configured, the API still tokenizes and returns warnings
+instead of pretending to translate.

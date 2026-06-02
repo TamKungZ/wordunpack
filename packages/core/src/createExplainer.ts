@@ -1,19 +1,25 @@
 import { buildLiteralTranslation } from "./buildLiteralTranslation.js";
+import { explainToken } from "./explainToken.js";
+import { assertSupportedLanguagePair } from "./languagePair.js";
 import {
-  MissingProviderError,
-} from "./errors.js";
-import { assertSupportedLanguagePair, getLanguagePairKey } from "./languagePair.js";
+  selectOptionalTokenTranslationProvider,
+  selectOptionalTranslationProvider,
+  selectOptionalWordMeaningProvider,
+  selectTokenizer,
+} from "./providerSelection.js";
+import {
+  pushOnce,
+  translateNaturally,
+  translateTokenSafely,
+} from "./translateWithProviders.js";
 import type {
   CreateExplainerOptions,
-  ExplainedToken,
   Explainer,
   ExplainSentenceOptions,
   SentenceExplanation,
-  SentenceTranslationProvider,
-  TokenizedToken,
-  TokenizerProvider,
-  WordMeaningProvider,
 } from "./types.js";
+
+const defaultTimeoutMs = 30_000;
 
 export function createExplainer(options: CreateExplainerOptions = {}): Explainer {
   const tokenizers = [
@@ -24,6 +30,12 @@ export function createExplainer(options: CreateExplainerOptions = {}): Explainer
     ...(options.wordMeaningProviders ?? []),
     ...(options.languageModules ?? []).flatMap(
       (module) => module.wordMeaningProviders ?? [],
+    ),
+  ];
+  const tokenTranslationProviders = [
+    ...(options.tokenTranslationProviders ?? []),
+    ...(options.languageModules ?? []).flatMap(
+      (module) => module.tokenTranslationProviders ?? [],
     ),
   ];
   const sentenceTranslationProviders = [
@@ -40,6 +52,11 @@ export function createExplainer(options: CreateExplainerOptions = {}): Explainer
     ): Promise<SentenceExplanation> {
       const source = explainOptions.source;
       const target = explainOptions.target;
+      const timeoutMs = explainOptions.timeoutMs ?? defaultTimeoutMs;
+      const includeTokenTranslation =
+        explainOptions.includeTokenTranslation ?? true;
+      const includeNaturalTranslation =
+        explainOptions.includeNaturalTranslation ?? true;
       assertSupportedLanguagePair(source, target);
 
       const normalizedInput = input.trim();
@@ -54,6 +71,11 @@ export function createExplainer(options: CreateExplainerOptions = {}): Explainer
         source,
         target,
       );
+      const tokenTranslationProvider = selectOptionalTokenTranslationProvider(
+        tokenTranslationProviders,
+        source,
+        target,
+      );
 
       const warnings: string[] = [];
       const providersUsed = new Set<string>([tokenizer.name]);
@@ -64,7 +86,7 @@ export function createExplainer(options: CreateExplainerOptions = {}): Explainer
 
       const tokens = await Promise.all(
         tokenizedTokens.map(async (token) => {
-          const gloss = wordMeaningProvider
+          const staticGloss = wordMeaningProvider
             ? await wordMeaningProvider.lookup(token, {
                 source,
                 target,
@@ -77,23 +99,60 @@ export function createExplainer(options: CreateExplainerOptions = {}): Explainer
             providersUsed.add(wordMeaningProvider.name);
           }
 
-          if (!gloss) {
+          if (!staticGloss && !tokenTranslationProvider) {
             warnings.push(`No gloss for token "${token.surface}".`);
           }
 
-          return explainToken(token, gloss, wordMeaningProvider?.name);
+          const translatedGloss = includeTokenTranslation
+            ? await translateTokenSafely({
+                cache: explainOptions.translationCache ?? options.translationCache,
+                input: normalizedInput,
+                provider: tokenTranslationProvider,
+                source,
+                target,
+                timeoutMs,
+                token,
+                tokens: tokenizedTokens,
+                warnings,
+                providersUsed,
+              })
+            : undefined;
+
+          if (
+            includeTokenTranslation &&
+            !tokenTranslationProvider &&
+            token.kind !== "punctuation"
+          ) {
+            pushOnce(warnings, "No translation provider configured");
+          }
+
+          return explainToken({
+            token,
+            staticGloss,
+            translatedGloss,
+            staticProviderName: wordMeaningProvider?.name,
+            tokenProviderName: tokenTranslationProvider?.name,
+          });
         }),
       );
 
-      const naturalTranslation = await translateNaturally({
-        cache: explainOptions.translationCache ?? options.translationCache,
-        input: normalizedInput,
-        provider: sentenceTranslationProvider,
-        source,
-        target,
-        tokens,
-        providersUsed,
-      });
+      const naturalTranslation = includeNaturalTranslation
+        ? await translateNaturally({
+            cache: explainOptions.translationCache ?? options.translationCache,
+            input: normalizedInput,
+            provider: sentenceTranslationProvider,
+            source,
+            target,
+            timeoutMs,
+            tokens,
+            providersUsed,
+            warnings,
+          })
+        : undefined;
+
+      if (includeNaturalTranslation && !sentenceTranslationProvider) {
+        pushOnce(warnings, "No translation provider configured");
+      }
 
       return {
         source,
@@ -114,88 +173,4 @@ export async function explainSentence(
   options: ExplainSentenceOptions & CreateExplainerOptions,
 ): Promise<SentenceExplanation> {
   return createExplainer(options).explainSentence(input, options);
-}
-
-function selectTokenizer(
-  providers: TokenizerProvider[],
-  source: string,
-): TokenizerProvider {
-  const provider = providers.find((candidate) => candidate.supports(source));
-  if (!provider) {
-    throw new MissingProviderError("tokenizer", `source "${source}"`);
-  }
-
-  return provider;
-}
-
-function selectOptionalWordMeaningProvider(
-  providers: WordMeaningProvider[],
-  source: string,
-  target: string,
-): WordMeaningProvider | undefined {
-  return providers.find((provider) => provider.supports(source, target));
-}
-
-function selectOptionalTranslationProvider(
-  providers: SentenceTranslationProvider[],
-  source: string,
-  target: string,
-): SentenceTranslationProvider | undefined {
-  return providers.find((provider) => provider.supports(source, target));
-}
-
-function explainToken(
-  token: TokenizedToken,
-  gloss: Partial<ExplainedToken> | undefined,
-  providerName: string | undefined,
-): ExplainedToken {
-  return {
-    ...token,
-    direct: gloss?.direct ?? token.surface,
-    role: gloss?.role ?? fallbackRole(token),
-    note: gloss?.note,
-    confidence: gloss?.confidence,
-    sourceProvider: gloss ? gloss.sourceProvider ?? providerName : undefined,
-  };
-}
-
-function fallbackRole(token: TokenizedToken): string {
-  if (token.kind === "punctuation") {
-    return "punctuation";
-  }
-
-  return token.partOfSpeech ?? "unknown";
-}
-
-async function translateNaturally(args: {
-  cache: CreateExplainerOptions["translationCache"];
-  input: string;
-  provider: SentenceTranslationProvider | undefined;
-  source: string;
-  target: string;
-  tokens: ExplainedToken[];
-  providersUsed: Set<string>;
-}): Promise<string | undefined> {
-  if (!args.provider) {
-    return undefined;
-  }
-
-  const cacheKey = getLanguagePairKey(args.source, args.target) + ":" + args.input;
-  const cached = await args.cache?.get(cacheKey);
-  if (cached) {
-    return cached;
-  }
-
-  const translated = await args.provider.translate(args.input, {
-    source: args.source,
-    target: args.target,
-    tokens: args.tokens,
-  });
-
-  if (translated) {
-    args.providersUsed.add(args.provider.name);
-    await args.cache?.set(cacheKey, translated);
-  }
-
-  return translated;
 }

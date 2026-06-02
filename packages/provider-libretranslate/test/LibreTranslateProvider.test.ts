@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { ProviderError } from "@wordunpack/core";
-import { LibreTranslateProvider } from "../src/index.js";
+import {
+  LibreTranslateProvider,
+  LibreTranslateTokenProvider,
+} from "../src/index.js";
 
 describe("LibreTranslateProvider", () => {
   it("posts to a LibreTranslate-compatible endpoint", async () => {
@@ -19,6 +22,7 @@ describe("LibreTranslateProvider", () => {
       source: "ja",
       target: "th",
       tokens: [],
+      timeoutMs: 30_000,
     });
 
     expect(translated).toBe("ฉันกินแอปเปิล");
@@ -37,7 +41,40 @@ describe("LibreTranslateProvider", () => {
     });
 
     await expect(
-      provider.translate("hello", { source: "en", target: "th", tokens: [] }),
+      provider.translate("hello", {
+        source: "en",
+        target: "th",
+        tokens: [],
+        timeoutMs: 30_000,
+      }),
     ).rejects.toBeInstanceOf(ProviderError);
+  });
+
+  it("translates a token using the same backend", async () => {
+    const provider = new LibreTranslateTokenProvider({
+      endpoint: "https://example.test/translate",
+      fetch: async (_url, init) => {
+        const body = JSON.parse(String(init?.body)) as { q: string };
+        return new Response(JSON.stringify({ translatedText: `${body.q}-th` }));
+      },
+    });
+
+    const gloss = await provider.translateToken(
+      {
+        surface: "食べ",
+        baseForm: "食べる",
+        kind: "word",
+        span: { start: 4, end: 6 },
+      },
+      {
+        source: "ja",
+        target: "th",
+        input: "私はりんごを食べます。",
+        tokens: [],
+        timeoutMs: 30_000,
+      },
+    );
+
+    expect(gloss?.direct).toBe("食べる-th");
   });
 });

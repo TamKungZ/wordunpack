@@ -24,6 +24,8 @@ describe("Japanese explanation integration", () => {
         input: caseData.input,
         source: "ja",
         target: "th",
+        includeNaturalTranslation: false,
+        includeTokenTranslation: false,
       }),
       headers: { "Content-Type": "application/json" },
     });

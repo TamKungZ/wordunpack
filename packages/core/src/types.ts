@@ -47,6 +47,9 @@ export interface SentenceExplanation {
 export interface ExplainSentenceOptions {
   source: LanguageCode;
   target: LanguageCode;
+  includeNaturalTranslation?: boolean;
+  includeTokenTranslation?: boolean;
+  timeoutMs?: number;
   translationCache?: TranslationCache;
   logger?: Logger;
 }
@@ -54,6 +57,7 @@ export interface ExplainSentenceOptions {
 export interface CreateExplainerOptions {
   tokenizers?: TokenizerProvider[];
   wordMeaningProviders?: WordMeaningProvider[];
+  tokenTranslationProviders?: TokenTranslationProvider[];
   sentenceTranslationProviders?: SentenceTranslationProvider[];
   romanizerProviders?: RomanizerProvider[];
   languageModules?: LanguageModule[];
@@ -73,10 +77,19 @@ export interface WordMeaningContext {
   tokens: TokenizedToken[];
 }
 
+export interface TokenTranslationContext {
+  source: LanguageCode;
+  target: LanguageCode;
+  input: string;
+  tokens: TokenizedToken[];
+  timeoutMs: number;
+}
+
 export interface SentenceTranslationContext {
   source: LanguageCode;
   target: LanguageCode;
   tokens: ExplainedToken[];
+  timeoutMs: number;
 }
 
 export interface RomanizerContext {
@@ -104,6 +117,23 @@ export interface WordMeaningProvider {
   ): Promise<Partial<ExplainedToken> | undefined>;
 }
 
+export interface TokenGloss {
+  direct: string;
+  role?: string;
+  note?: string;
+  confidence?: number;
+  sourceProvider?: string;
+}
+
+export interface TokenTranslationProvider {
+  name: string;
+  supports(source: LanguageCode, target: LanguageCode): boolean;
+  translateToken(
+    token: TokenizedToken,
+    context: TokenTranslationContext,
+  ): Promise<TokenGloss | undefined>;
+}
+
 export interface SentenceTranslationProvider {
   name: string;
   supports(source: LanguageCode, target: LanguageCode): boolean;
@@ -127,6 +157,7 @@ export interface LanguageModule {
   source: LanguageCode;
   tokenizers?: TokenizerProvider[];
   wordMeaningProviders?: WordMeaningProvider[];
+  tokenTranslationProviders?: TokenTranslationProvider[];
   sentenceTranslationProviders?: SentenceTranslationProvider[];
   romanizerProviders?: RomanizerProvider[];
 }

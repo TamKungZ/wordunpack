@@ -9,14 +9,19 @@ import {
   type CreateExplainerOptions,
   type LanguageCode,
   type SentenceTranslationProvider,
+  type TokenTranslationProvider,
 } from "@wordunpack/core";
 import { JapaneseThaiSeedGlossProvider } from "@wordunpack/gloss-ja-th";
-import { LibreTranslateProvider } from "@wordunpack/provider-libretranslate";
+import {
+  LibreTranslateProvider,
+  LibreTranslateTokenProvider,
+} from "@wordunpack/provider-libretranslate";
 import { KuromojiTokenizerProvider } from "@wordunpack/tokenizer-ja-kuromoji";
 
 import { MemoryTranslationCache } from "./memoryTranslationCache.js";
 
 export interface ApiEnvironment {
+  WORDUNPACK_TRANSLATION_PROVIDER?: string;
   LIBRETRANSLATE_ENDPOINT?: string;
   LIBRETRANSLATE_API_KEY?: string;
 }
@@ -30,6 +35,8 @@ interface ExplainRequestBody {
   source?: unknown;
   target?: unknown;
   includeNaturalTranslation?: unknown;
+  includeTokenTranslation?: unknown;
+  timeoutMs?: unknown;
 }
 
 export function createApiApp(options: CreateApiAppOptions = {}) {
@@ -37,6 +44,10 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
   const translationProviders = [
     ...(options.sentenceTranslationProviders ?? []),
     ...createEnvironmentTranslationProviders(env),
+  ];
+  const tokenTranslationProviders = [
+    ...(options.tokenTranslationProviders ?? []),
+    ...createEnvironmentTokenTranslationProviders(env),
   ];
   const tokenizers = options.tokenizers ?? [new KuromojiTokenizerProvider()];
   const wordMeaningProviders = options.wordMeaningProviders ?? [
@@ -52,6 +63,7 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
   const translationExplainer = createExplainer({
     ...commonOptions,
     sentenceTranslationProviders: translationProviders,
+    tokenTranslationProviders,
   });
   const app = new Hono();
 
@@ -68,12 +80,28 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
 
     try {
       const selectedExplainer = body.includeNaturalTranslation
+        || body.includeTokenTranslation
         ? translationExplainer
         : explainer;
+      const includeNaturalTranslation = body.includeNaturalTranslation === true;
+      const includeTokenTranslation = body.includeTokenTranslation === true;
       const result = await selectedExplainer.explainSentence(validation.input, {
         source: validation.source,
         target: validation.target,
+        includeNaturalTranslation,
+        includeTokenTranslation,
+        timeoutMs: validation.timeoutMs,
       });
+
+      if (
+        (includeNaturalTranslation || includeTokenTranslation) &&
+        translationProviders.length === 0 &&
+        tokenTranslationProviders.length === 0
+      ) {
+        if (!result.warnings.includes("No translation provider configured")) {
+          result.warnings.push("No translation provider configured");
+        }
+      }
 
       return context.json(result);
     } catch (error) {
@@ -92,6 +120,9 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
       const result = await translationExplainer.explainSentence(validation.input, {
         source: validation.source,
         target: validation.target,
+        includeNaturalTranslation: true,
+        includeTokenTranslation: false,
+        timeoutMs: validation.timeoutMs,
       });
 
       return context.json({
@@ -110,16 +141,38 @@ export function createApiApp(options: CreateApiAppOptions = {}) {
 function createEnvironmentTranslationProviders(
   env: ApiEnvironment,
 ): SentenceTranslationProvider[] {
-  if (!env.LIBRETRANSLATE_ENDPOINT) {
+  if (!shouldUseLibreTranslate(env)) {
     return [];
   }
 
   return [
     new LibreTranslateProvider({
-      endpoint: env.LIBRETRANSLATE_ENDPOINT,
+      endpoint: env.LIBRETRANSLATE_ENDPOINT!,
       apiKey: env.LIBRETRANSLATE_API_KEY,
     }),
   ];
+}
+
+function createEnvironmentTokenTranslationProviders(
+  env: ApiEnvironment,
+): TokenTranslationProvider[] {
+  if (!shouldUseLibreTranslate(env)) {
+    return [];
+  }
+
+  return [
+    new LibreTranslateTokenProvider({
+      endpoint: env.LIBRETRANSLATE_ENDPOINT!,
+      apiKey: env.LIBRETRANSLATE_API_KEY,
+    }),
+  ];
+}
+
+function shouldUseLibreTranslate(env: ApiEnvironment): boolean {
+  return (
+    env.WORDUNPACK_TRANSLATION_PROVIDER === "libretranslate" &&
+    Boolean(env.LIBRETRANSLATE_ENDPOINT)
+  );
 }
 
 function validateExplainBody(body: ExplainRequestBody):
@@ -128,6 +181,7 @@ function validateExplainBody(body: ExplainRequestBody):
       input: string;
       source: LanguageCode;
       target: LanguageCode;
+      timeoutMs: number;
     }
   | { ok: false; error: string } {
   if (typeof body.input !== "string" || !body.input.trim()) {
@@ -142,11 +196,17 @@ function validateExplainBody(body: ExplainRequestBody):
     return { ok: false, error: "target is required" };
   }
 
+  const timeoutMs =
+    typeof body.timeoutMs === "number" && Number.isFinite(body.timeoutMs)
+      ? body.timeoutMs
+      : 30_000;
+
   return {
     ok: true,
     input: body.input,
     source: body.source,
     target: body.target,
+    timeoutMs,
   };
 }
 

@@ -46,6 +46,79 @@ npm test
 npm run build
 ```
 
+## End-to-End Prototype Usage
+
+WordUnpack can tokenize without a translation provider. To get provider-backed
+token direct meanings and natural sentence translations, configure a real
+translation backend.
+
+Example with a local LibreTranslate-compatible server:
+
+```sh
+set WORDUNPACK_TRANSLATION_PROVIDER=libretranslate
+set LIBRETRANSLATE_ENDPOINT=http://localhost:5000/translate
+set LIBRETRANSLATE_API_KEY=
+```
+
+Then call the API package:
+
+```ts
+import { createApiApp } from "@wordunpack/api";
+
+const app = createApiApp();
+
+const response = await app.request("/explain", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    input: "私はりんごを食べます。",
+    source: "ja",
+    target: "th",
+    includeNaturalTranslation: true,
+    includeTokenTranslation: true,
+    timeoutMs: 30000
+  })
+});
+
+console.log(await response.json());
+```
+
+Expected response shape:
+
+```json
+{
+  "source": "ja",
+  "target": "th",
+  "input": "私はりんごを食べます。",
+  "tokens": [
+    {
+      "surface": "私",
+      "kind": "word",
+      "direct": "ฉัน",
+      "role": "名詞/代名詞/一般",
+      "sourceProvider": "provider-libretranslate"
+    }
+  ],
+  "literalTranslation": "ฉัน / หัวข้อ / แอปเปิล / ชี้กรรม / กิน / ...",
+  "naturalTranslation": "ฉันกินแอปเปิล",
+  "providersUsed": ["tokenizer-ja-kuromoji", "gloss-ja-th-seed", "provider-libretranslate"],
+  "warnings": []
+}
+```
+
+If provider config is missing, `/explain` still returns tokenized output with
+fallback direct values and includes:
+
+```json
+{ "warnings": ["No translation provider configured"] }
+```
+
+Manual example:
+
+```sh
+npm run example:ja-th
+```
+
 ## License
 
 Apache-2.0

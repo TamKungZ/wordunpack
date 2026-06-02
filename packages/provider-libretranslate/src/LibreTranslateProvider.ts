@@ -3,6 +3,10 @@ import {
   type LanguageCode,
   type SentenceTranslationContext,
   type SentenceTranslationProvider,
+  type TokenGloss,
+  type TokenTranslationContext,
+  type TokenTranslationProvider,
+  type TokenizedToken,
 } from "@wordunpack/core";
 
 export interface LibreTranslateProviderOptions {
@@ -81,4 +85,54 @@ export class LibreTranslateProvider implements SentenceTranslationProvider {
       clearTimeout(timeout);
     }
   }
+}
+
+export class LibreTranslateTokenProvider implements TokenTranslationProvider {
+  readonly name = "provider-libretranslate";
+
+  private readonly sentenceProvider: LibreTranslateProvider;
+
+  constructor(options: LibreTranslateProviderOptions) {
+    this.sentenceProvider = new LibreTranslateProvider(options);
+  }
+
+  supports(source: LanguageCode, target: LanguageCode): boolean {
+    return this.sentenceProvider.supports(source, target);
+  }
+
+  async translateToken(
+    token: TokenizedToken,
+    context: TokenTranslationContext,
+  ): Promise<TokenGloss | undefined> {
+    const text = chooseTokenText(token);
+    if (!text) {
+      return undefined;
+    }
+
+    const direct = await this.sentenceProvider.translate(text, {
+      source: context.source,
+      target: context.target,
+      tokens: [],
+      timeoutMs: context.timeoutMs,
+    });
+
+    if (!direct) {
+      return undefined;
+    }
+
+    return {
+      direct,
+      role: token.partOfSpeech,
+      confidence: 0.7,
+      sourceProvider: this.name,
+    };
+  }
+}
+
+function chooseTokenText(token: TokenizedToken): string | undefined {
+  if (token.kind === "punctuation") {
+    return undefined;
+  }
+
+  return token.baseForm ?? token.lemma ?? token.normalized ?? token.surface;
 }
